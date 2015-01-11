@@ -15,6 +15,8 @@ Usage:
 
 import bs4
 import docopt as dopt
+import functools
+import multiprocessing as mp
 import os
 import requests
 
@@ -58,9 +60,14 @@ def download_image(image, volume, chapter):
     return filename
 
 
-def download_images(images_iter, volume_idx, chapter_idx):
-    for image in images_iter:
-        download_image(image, volume_idx, chapter_idx)
+def download_images(images_iter, volume_idx, chapter_idx, threads=6):
+    download = functools.partial(download_image,
+                                 volume=volume_idx,
+                                 chapter=chapter_idx)
+    with mp.Pool(processes=threads) as pool:
+        for name in pool.imap(download,
+                              images_iter):
+            print(name)
 
 
 def download_complete_manga(url):
