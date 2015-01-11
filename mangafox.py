@@ -13,9 +13,10 @@ Usage:
 
 """
 
-import docopt as dopt
-import requests
 import bs4
+import docopt as dopt
+import os
+import requests
 
 
 def crawl_chapter(chapter_url):
@@ -42,11 +43,12 @@ def crawl_chapter(chapter_url):
 
 
 def download_image(image, volume, chapter):
-    print(image)
     filename = "downloads/{:03}_{:03}_{}".format(
         volume,
         chapter,
         image.split('/')[-1])
+    if os.path.isfile(filename):
+        return filename
     r = requests.get(image, stream=True)
     with open(filename, 'wb') as f:
         for chunk in r.iter_content(chunk_size=1024):
@@ -56,29 +58,44 @@ def download_image(image, volume, chapter):
     return filename
 
 
+def download_images(images_iter, volume_idx, chapter_idx):
+    for image in images_iter:
+        download_image(image, volume_idx, chapter_idx)
+
+
+def download_complete_manga(url):
+    # Download content and parse as html
+    main_page = requests.get(url)
+    main_page.encoding = 'utf-8'
+    main_page = bs4.BeautifulSoup(main_page.text)
+
+    # Compile all available volumes into one list
+    volume_list = main_page.findAll('ul', 'chlist')
+    volume_list.reverse()  # Order from oldest to newest
+
+    # Compile all chapters into one list
+    print("Compiling chapters_list")
+    chapters_list = list()
+    for volume in volume_list:
+        chapters = volume.findAll('a', 'tips')
+        chapters_links = [x['href'] for x in chapters]
+        chapters_links.reverse()
+        chapters_list.append(chapters_links)
+
+    print("Iterating over chapters_list")
+    for volume_idx, volume in enumerate(chapters_list):
+        print("Downloading volume {:03} of {:03}".format(volume_idx,
+                                                         len(chapters_list)))
+        for chapter_idx, chapter in enumerate(volume):
+            print("Downloading chapter {:03} of {:03}".format(chapter_idx,
+                                                              len(volume_list)))
+            images_iter = crawl_chapter(chapter)
+            download_images(images_iter, volume_idx, chapter_idx)
+
+
 def main():
     arguments = dopt.docopt(__doc__)
-    data = requests.get(arguments['<manga_url>'])
-    data.encoding = 'utf-8'
-    data = bs4.BeautifulSoup(data.text)
-    chapter_list = data.findAll('ul', 'chlist')
-    chapter_list.reverse()
-    links_list = list()
-    for chapter in chapter_list:
-        links = chapter.findAll('a', 'tips')
-        links = [x['href'] for x in links]
-        links.reverse()
-        links_list.append(links)
-
-    volume_num = 0
-    for volume in links_list:
-        chapter_num = 0
-        volume_num += 1
-        for link in volume:
-            chapter_num += 1
-            images_iter = crawl_chapter(link)
-            for image in images_iter:
-                print(download_image(image, volume_num, chapter_num))
+    download_complete_manga(arguments['<manga_url>'])
 
 if __name__ == '__main__':
     main()
