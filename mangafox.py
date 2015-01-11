@@ -88,7 +88,7 @@ def download_complete_manga(url):
                                                          len(chapters_list)))
         for chapter_idx, chapter in enumerate(volume):
             print("Downloading chapter {:03} of {:03}".format(chapter_idx,
-                                                              len(volume_list)))
+                                                              len(volume)))
             images_iter = crawl_chapter(chapter)
             download_images(images_iter, volume_idx, chapter_idx)
 
