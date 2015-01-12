@@ -23,6 +23,15 @@ import requests
 
 
 def crawl_chapter(chapter_url):
+    """Crawl chapter and yield image links
+
+    Args:
+        chapter_url (string); Url to the first page of the chapter.
+
+    Returns:
+        Iterator: Over the image urls.
+
+    """
     base_url = chapter_url.split('/')
     del base_url[len(base_url) - 1]
     data = requests.get(chapter_url)
@@ -46,6 +55,18 @@ def crawl_chapter(chapter_url):
 
 
 def download_image(image, volume, chapter):
+    """Download a image prepend the name with volume and chapter
+
+    Args:
+        image (string): Url to the image.
+        volume (int): Number of the volume. Only used for file naming.
+        chapter (int): Number of the chapter within the volume. Only used for
+            file naming.
+
+    Returns:
+        string: Filename
+
+    """
     filename = "downloads/{:03}_{:03}_{}".format(
         volume,
         chapter,
@@ -62,6 +83,17 @@ def download_image(image, volume, chapter):
 
 
 def download_images(images_iter, volume_idx, chapter_idx, threads=6):
+    """Download images from one iterator
+
+    Args:
+        images_iter (iterator): Iterator over image urls
+        volume (int): Number of the volume. Only used for file naming.
+        chapter (int): Number of the chapter within the volume. Only used for
+            file naming.
+        threads (int): Number of threads used for downloading. Defaults to 6.
+
+
+    """
     download = functools.partial(download_image,
                                  volume=volume_idx,
                                  chapter=chapter_idx)
@@ -72,6 +104,13 @@ def download_images(images_iter, volume_idx, chapter_idx, threads=6):
 
 
 def download_volume(url, number):
+    """Process url and download specified volume
+
+    Args:
+        url (string): Url to the manga
+        number (int): Zero-based index to the volume to download
+
+    """
     # Download content and parse as html
     main_page = requests.get(url)
     main_page.encoding = 'utf-8'
@@ -94,6 +133,12 @@ def download_volume(url, number):
 
 
 def download_complete_manga(url):
+    """Process url and download all volumes/chapters
+
+    Args:
+        url (string): Url to the manga
+
+    """
     # Download content and parse as html
     main_page = requests.get(url)
     main_page.encoding = 'utf-8'
