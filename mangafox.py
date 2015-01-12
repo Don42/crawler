@@ -10,6 +10,7 @@
 
 Usage:
     mangafox <manga_url>
+    mangafox <manga_url> <number>
 
 """
 
@@ -70,6 +71,28 @@ def download_images(images_iter, volume_idx, chapter_idx, threads=6):
             print(name)
 
 
+def download_volume(url, number):
+    # Download content and parse as html
+    main_page = requests.get(url)
+    main_page.encoding = 'utf-8'
+    main_page = bs4.BeautifulSoup(main_page.text)
+
+    # Compile all available volumes into one list
+    volume_list = main_page.findAll('ul', 'chlist')
+    volume_list.reverse()  # Order from oldest to newest
+
+    volume = volume_list[number]
+    chapters = volume.findAll('a', 'tips')
+    chapters_links = [x['href'] for x in chapters]
+    chapters_links.reverse()
+
+    for chapter_idx, chapter in enumerate(chapters_links):
+        print("Downloading chapter {:03} of {:03}".format(chapter_idx + 1,
+                                                          len(chapters_links)))
+        images_iter = crawl_chapter(chapter)
+        download_images(images_iter, number, chapter_idx)
+
+
 def download_complete_manga(url):
     # Download content and parse as html
     main_page = requests.get(url)
@@ -102,7 +125,10 @@ def download_complete_manga(url):
 
 def main():
     arguments = dopt.docopt(__doc__)
-    download_complete_manga(arguments['<manga_url>'])
+    if arguments.get('<number>', None) is not None:
+        download_volume(arguments['<manga_url>'], int(arguments['<number>']))
+    else:
+        download_complete_manga(arguments['<manga_url>'])
 
 if __name__ == '__main__':
     main()
