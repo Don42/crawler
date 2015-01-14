@@ -20,6 +20,7 @@ import functools
 import multiprocessing as mp
 import os
 import requests
+import zipfile
 
 
 def crawl_chapter(chapter_url):
@@ -97,10 +98,12 @@ def download_images(images_iter, volume_idx, chapter_idx, threads=6):
     download = functools.partial(download_image,
                                  volume=volume_idx,
                                  chapter=chapter_idx)
+    filenames = []
     with mp.Pool(processes=threads) as pool:
         for name in pool.imap(download,
                               images_iter):
-            print(name)
+            filenames.append(name)
+    return filenames
 
 
 def download_volume(url, number):
@@ -129,7 +132,17 @@ def download_volume(url, number):
         print("Downloading chapter {:03} of {:03}".format(chapter_idx + 1,
                                                           len(chapters_links)))
         images_iter = crawl_chapter(chapter)
-        download_images(images_iter, number, chapter_idx)
+        filenames = download_images(images_iter, number, chapter_idx)
+        with zipfile.ZipFile(
+                '{name}_{volume:03}_{chapter:03}.zip'.format(
+                    name=url.split('/')[-2],
+                    volume=number,
+                    chapter=chapter_idx),
+                mode='w',
+                compression=zipfile.ZIP_DEFLATED) as cbz:
+
+            for filename in filenames:
+                cbz.write(filename)
 
 
 def download_complete_manga(url):
