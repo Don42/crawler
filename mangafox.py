@@ -23,6 +23,27 @@ import requests
 import zipfile
 
 
+def get_chapters_list(url):
+    # Download content and parse as html
+    main_page = requests.get(url)
+    main_page.encoding = 'utf-8'
+    main_page = bs4.BeautifulSoup(main_page.text)
+
+    # Compile all available volumes into one list
+    volume_list = main_page.findAll('ul', 'chlist')
+    volume_list.reverse()  # Order from oldest to newest
+
+    # Compile all chapters into one list
+    print("Compiling chapters_list")
+    chapters_list = list()
+    for volume in volume_list:
+        chapters = volume.findAll('a', 'tips')
+        chapters_links = [x['href'] for x in chapters]
+        chapters_links.reverse()
+        chapters_list.append(chapters_links)
+    return chapters_list
+
+
 def crawl_chapter(chapter_url):
     """Crawl chapter and yield image links
 
@@ -114,19 +135,7 @@ def download_volume(url, number):
         number (int): Zero-based index to the volume to download
 
     """
-    # Download content and parse as html
-    main_page = requests.get(url)
-    main_page.encoding = 'utf-8'
-    main_page = bs4.BeautifulSoup(main_page.text)
-
-    # Compile all available volumes into one list
-    volume_list = main_page.findAll('ul', 'chlist')
-    volume_list.reverse()  # Order from oldest to newest
-
-    volume = volume_list[number]
-    chapters = volume.findAll('a', 'tips')
-    chapters_links = [x['href'] for x in chapters]
-    chapters_links.reverse()
+    chapters_links = get_chapters_list(url)[number]
 
     for chapter_idx, chapter in enumerate(chapters_links):
         print("Downloading chapter {:03} of {:03}".format(chapter_idx + 1,
@@ -152,24 +161,7 @@ def download_complete_manga(url):
         url (string): Url to the manga
 
     """
-    # Download content and parse as html
-    main_page = requests.get(url)
-    main_page.encoding = 'utf-8'
-    main_page = bs4.BeautifulSoup(main_page.text)
-
-    # Compile all available volumes into one list
-    volume_list = main_page.findAll('ul', 'chlist')
-    volume_list.reverse()  # Order from oldest to newest
-
-    # Compile all chapters into one list
-    print("Compiling chapters_list")
-    chapters_list = list()
-    for volume in volume_list:
-        chapters = volume.findAll('a', 'tips')
-        chapters_links = [x['href'] for x in chapters]
-        chapters_links.reverse()
-        chapters_list.append(chapters_links)
-
+    chapters_list = get_chapters_list(url)
     print("Iterating over chapters_list")
     for volume_idx, volume in enumerate(chapters_list):
         print("Downloading volume {:03} of {:03}".format(volume_idx,
