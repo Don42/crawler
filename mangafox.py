@@ -142,16 +142,12 @@ def download_volume(url, number):
                                                           len(chapters_links)))
         images_iter = crawl_chapter(chapter)
         filenames = download_images(images_iter, number, chapter_idx)
-        with zipfile.ZipFile(
-                '{name}_{volume:03}_{chapter:03}.zip'.format(
-                    name=url.split('/')[-2],
-                    volume=number,
-                    chapter=chapter_idx),
-                mode='w',
-                compression=zipfile.ZIP_DEFLATED) as cbz:
-
-            for filename in filenames:
-                cbz.write(filename)
+        create_zip_file(
+            '{name}_{volume:03}_{chapter:03}.cbz'.format(
+                name=url.split('/')[-2],
+                volume=number + 1,
+                chapter=chapter_idx + 1),
+            filenames)
 
 
 def download_complete_manga(url):
@@ -164,13 +160,28 @@ def download_complete_manga(url):
     chapters_list = get_chapters_list(url)
     print("Iterating over chapters_list")
     for volume_idx, volume in enumerate(chapters_list):
-        print("Downloading volume {:03} of {:03}".format(volume_idx,
+        print("Downloading volume {:03} of {:03}".format(volume_idx + 1,
                                                          len(chapters_list)))
         for chapter_idx, chapter in enumerate(volume):
-            print("Downloading chapter {:03} of {:03}".format(chapter_idx,
+            print("Downloading chapter {:03} of {:03}".format(chapter_idx + 1,
                                                               len(volume)))
             images_iter = crawl_chapter(chapter)
-            download_images(images_iter, volume_idx, chapter_idx)
+            filenames = download_images(images_iter, volume_idx, chapter_idx)
+            create_zip_file(
+                '{name}_{volume:03}_{chapter:03}.cbz'.format(
+                    name=url.split('/')[-2],
+                    volume=volume_idx + 1,
+                    chapter=chapter_idx + 1),
+                filenames)
+
+
+def create_zip_file(zipname, filenames):
+    with zipfile.ZipFile(zipname,
+                         mode='w',
+                         compression=zipfile.ZIP_DEFLATED) as cbz:
+
+        for filename in filenames:
+            cbz.write(filename)
 
 
 def main():
