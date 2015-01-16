@@ -9,8 +9,10 @@
 """mangafox fetches images from mangafox.me
 
 Usage:
-    mangafox <manga_url>
-    mangafox <manga_url> <number>
+    mangafox [--chapter] <manga_url> [<number>]
+
+Options:
+    -c --chapter    Create zipfile from each chapter instead of every volume
 
 """
 
@@ -127,7 +129,7 @@ def download_images(images_iter, volume_idx, chapter_idx, threads=6):
     return filenames
 
 
-def download_volume(url, number):
+def download_volume(url, number, zip_chapter=False):
     """Process url and download specified volume
 
     Args:
@@ -137,20 +139,30 @@ def download_volume(url, number):
     """
     chapters_links = get_chapters_list(url)[number]
 
+    volume_filenames = list()
     for chapter_idx, chapter in enumerate(chapters_links):
         print("Downloading chapter {:03} of {:03}".format(chapter_idx + 1,
                                                           len(chapters_links)))
         images_iter = crawl_chapter(chapter)
-        filenames = download_images(images_iter, number, chapter_idx)
+        chapter_filenames = download_images(images_iter, number, chapter_idx)
+        volume_filenames.extend(chapter_filenames)
+        if zip_chapter:
+            create_zip_file(
+                '{name}_{volume:03}_{chapter:03}.cbz'.format(
+                    name=url.split('/')[-2],
+                    volume=number + 1,
+                    chapter=chapter_idx + 1),
+                chapter_filenames)
+    if not zip_chapter:
         create_zip_file(
             '{name}_{volume:03}_{chapter:03}.cbz'.format(
                 name=url.split('/')[-2],
                 volume=number + 1,
                 chapter=chapter_idx + 1),
-            filenames)
+            volume_filenames)
 
 
-def download_complete_manga(url):
+def download_complete_manga(url, zip_chapter=False):
     """Process url and download all volumes/chapters
 
     Args:
@@ -162,17 +174,29 @@ def download_complete_manga(url):
     for volume_idx, volume in enumerate(chapters_list):
         print("Downloading volume {:03} of {:03}".format(volume_idx + 1,
                                                          len(chapters_list)))
+        volume_filenames = list()
         for chapter_idx, chapter in enumerate(volume):
             print("Downloading chapter {:03} of {:03}".format(chapter_idx + 1,
                                                               len(volume)))
             images_iter = crawl_chapter(chapter)
-            filenames = download_images(images_iter, volume_idx, chapter_idx)
+            chapter_filenames = download_images(images_iter,
+                                                volume_idx,
+                                                chapter_idx)
+            volume_filenames.extend(chapter_filenames)
+            if zip_chapter:
+                create_zip_file(
+                    '{name}_{volume:03}_{chapter:03}.cbz'.format(
+                        name=url.split('/')[-2],
+                        volume=volume_idx + 1,
+                        chapter=chapter_idx + 1),
+                    chapter_filenames)
+        if not zip_chapter:
             create_zip_file(
                 '{name}_{volume:03}_{chapter:03}.cbz'.format(
                     name=url.split('/')[-2],
                     volume=volume_idx + 1,
                     chapter=chapter_idx + 1),
-                filenames)
+                volume_filenames)
 
 
 def create_zip_file(zipname, filenames):
@@ -187,9 +211,12 @@ def create_zip_file(zipname, filenames):
 def main():
     arguments = dopt.docopt(__doc__)
     if arguments.get('<number>', None) is not None:
-        download_volume(arguments['<manga_url>'], int(arguments['<number>']))
+        download_volume(arguments['<manga_url>'],
+                        int(arguments['<number>']),
+                        arguments.get('--chapter', False))
     else:
-        download_complete_manga(arguments['<manga_url>'])
+        download_complete_manga(arguments['<manga_url>'],
+                                arguments.get('--chapter', False))
 
 if __name__ == '__main__':
     main()
