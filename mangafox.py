@@ -26,6 +26,16 @@ import zipfile
 
 
 def get_chapters_list(url):
+    """Parse main page and  return list of volumes
+
+    Args:
+        url (string): Url to the manga main page
+
+    Returns:
+        list: List of all volumes sorted from oldest to newest.
+              Each contains a list of chapters sorted from oldest to newest.
+
+    """
     # Download content and parse as html
     main_page = requests.get(url)
     main_page.encoding = 'utf-8'
@@ -200,6 +210,13 @@ def download_complete_manga(url, zip_chapter=False):
 
 
 def create_zip_file(zipname, filenames):
+    """Create zip file from files in filenames list
+
+    Args:
+        zipname (string): Name of the zipfile to create
+        filenames (list): List of files to add to the newly created zipfile
+
+    """
     with zipfile.ZipFile(zipname,
                          mode='w',
                          compression=zipfile.ZIP_DEFLATED) as cbz:
