@@ -9,10 +9,11 @@
 """mangafox fetches images from mangafox.me
 
 Usage:
-    mangafox [--chapter] <manga_url> [<number>]
+    mangafox [--folder=FOLDER] [--chapter] <manga_url> [<number>]
 
 Options:
     -c --chapter    Create zipfile from each chapter instead of every volume
+    -f --folder=FOLDER
 
 """
 
@@ -88,7 +89,7 @@ def crawl_chapter(chapter_url):
             break
 
 
-def download_image(image, volume, chapter):
+def download_image(folder, image, volume, chapter):
     """Download a image prepend the name with volume and chapter
 
     Args:
@@ -101,7 +102,7 @@ def download_image(image, volume, chapter):
         string: Filename
 
     """
-    filename = "downloads/{:03}_{:03}_{}".format(
+    filename = "{folder}/{:03}_{:03}_{}".format(
         volume,
         chapter,
         image.split('/')[-1])
@@ -116,7 +117,7 @@ def download_image(image, volume, chapter):
     return filename
 
 
-def download_images(images_iter, volume_idx, chapter_idx, threads=6):
+def download_images(folder, images_iter, volume_idx, chapter_idx, threads=6):
     """Download images from one iterator
 
     Args:
@@ -130,7 +131,8 @@ def download_images(images_iter, volume_idx, chapter_idx, threads=6):
     """
     download = functools.partial(download_image,
                                  volume=volume_idx,
-                                 chapter=chapter_idx)
+                                 chapter=chapter_idx,
+                                 folder=folder)
     filenames = []
     with mp.Pool(processes=threads) as pool:
         for name in pool.imap(download,
@@ -139,7 +141,7 @@ def download_images(images_iter, volume_idx, chapter_idx, threads=6):
     return filenames
 
 
-def download_volume(url, number, zip_chapter=False):
+def download_volume(url, number, folder, zip_chapter=False):
     """Process url and download specified volume
 
     Args:
@@ -154,7 +156,10 @@ def download_volume(url, number, zip_chapter=False):
         print("Downloading chapter {:03} of {:03}".format(chapter_idx + 1,
                                                           len(chapters_links)))
         images_iter = crawl_chapter(chapter)
-        chapter_filenames = download_images(images_iter, number, chapter_idx)
+        chapter_filenames = download_images(folder,
+                                            images_iter,
+                                            number,
+                                            chapter_idx)
         volume_filenames.extend(chapter_filenames)
         if zip_chapter:
             create_zip_file(
@@ -172,7 +177,7 @@ def download_volume(url, number, zip_chapter=False):
             volume_filenames)
 
 
-def download_complete_manga(url, zip_chapter=False):
+def download_complete_manga(url, folder, zip_chapter=False):
     """Process url and download all volumes/chapters
 
     Args:
@@ -189,7 +194,7 @@ def download_complete_manga(url, zip_chapter=False):
             print("Downloading chapter {:03} of {:03}".format(chapter_idx + 1,
                                                               len(volume)))
             images_iter = crawl_chapter(chapter)
-            chapter_filenames = download_images(images_iter,
+            chapter_filenames = download_images(folder, images_iter,
                                                 volume_idx,
                                                 chapter_idx)
             volume_filenames.extend(chapter_filenames)
@@ -230,9 +235,11 @@ def main():
     if arguments.get('<number>', None) is not None:
         download_volume(arguments['<manga_url>'],
                         int(arguments['<number>']),
+                        arguments.get('--folder', 'downloads'),
                         arguments.get('--chapter', False))
     else:
         download_complete_manga(arguments['<manga_url>'],
+                                arguments.get('--folder', 'downloads'),
                                 arguments.get('--chapter', False))
 
 if __name__ == '__main__':
