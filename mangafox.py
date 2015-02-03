@@ -21,7 +21,7 @@ import bs4
 import docopt as dopt
 import functools
 import multiprocessing as mp
-import os
+import pathlib
 import requests
 import zipfile
 
@@ -89,7 +89,7 @@ def crawl_chapter(chapter_url):
             break
 
 
-def download_image(folder, image, volume, chapter):
+def download_image(image, volume, chapter, folder):
     """Download a image prepend the name with volume and chapter
 
     Args:
@@ -99,22 +99,22 @@ def download_image(folder, image, volume, chapter):
             file naming.
 
     Returns:
-        string: Filename
+        pathlib.Path: File_name
 
     """
-    filename = "{folder}/{:03}_{:03}_{}".format(
+    file_path = folder / '{:03}_{:03}_{}'.format(
         volume,
         chapter,
         image.split('/')[-1])
-    if os.path.isfile(filename):
-        return filename
+    if file_path.exists():
+        return file_path
     r = requests.get(image, stream=True)
-    with open(filename, 'wb') as f:
+    with file_path.open(mode='wb') as f:
         for chunk in r.iter_content(chunk_size=1024):
             if chunk:  # filter out keep-alive new chunks
                 f.write(chunk)
                 f.flush()
-    return filename
+    return file_path
 
 
 def download_images(folder, images_iter, volume_idx, chapter_idx, threads=6):
@@ -133,6 +133,8 @@ def download_images(folder, images_iter, volume_idx, chapter_idx, threads=6):
                                  volume=volume_idx,
                                  chapter=chapter_idx,
                                  folder=folder)
+    if not folder.exists():
+        folder.mkdir(parents=True)
     filenames = []
     with mp.Pool(processes=threads) as pool:
         for name in pool.imap(download,
@@ -194,7 +196,8 @@ def download_complete_manga(url, folder, zip_chapter=False):
             print("Downloading chapter {:03} of {:03}".format(chapter_idx + 1,
                                                               len(volume)))
             images_iter = crawl_chapter(chapter)
-            chapter_filenames = download_images(folder, images_iter,
+            chapter_filenames = download_images(folder,
+                                                images_iter,
                                                 volume_idx,
                                                 chapter_idx)
             volume_filenames.extend(chapter_filenames)
@@ -227,7 +230,7 @@ def create_zip_file(zipname, filenames):
                          compression=zipfile.ZIP_DEFLATED) as cbz:
 
         for filename in filenames:
-            cbz.write(filename)
+            cbz.write(str(filename))
 
 
 def main():
@@ -235,11 +238,12 @@ def main():
     if arguments.get('<number>', None) is not None:
         download_volume(arguments['<manga_url>'],
                         int(arguments['<number>']),
-                        arguments.get('--folder', 'downloads'),
+                        pathlib.Path(arguments.get('--folder', 'downloads')),
                         arguments.get('--chapter', False))
     else:
         download_complete_manga(arguments['<manga_url>'],
-                                arguments.get('--folder', 'downloads'),
+                                pathlib.Path(arguments.get(
+                                    '--folder', 'downloads')),
                                 arguments.get('--chapter', False))
 
 if __name__ == '__main__':
