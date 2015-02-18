@@ -10,7 +10,8 @@
 '''Download recipies
 
 Usage:
-    jamieoliver <url>
+    jamieoliver recipes <url>
+    jamieoliver categories
 '''
 
 import bs4
@@ -32,14 +33,29 @@ def parse_recipe(page):
         'span', {'class': ''})]
     instructions = content.find('p', {'class', 'instructions'}).text
     return {'instructions': instructions, 'desc_yield': desc_yield,
-            'ingredients_list': ingredients_list}
+            'ingredients': ingredients_list}
+
+
+def download_categories():
+    url = 'http://www.jamieoliver.com/'
+    r = requests.get(url)
+    r.encoding = 'utf-8'
+    soup = bs4.BeautifulSoup(r.text)
+    categories_div = soup.find('div', {'class': 'cat_secondary'})
+    categories_a = categories_div.find_all('a')
+    link_list = [x['href'] for x in categories_a]
+    return link_list
 
 
 def main():
     arguments = docopt.docopt(__doc__)
-    page = download_recipe(arguments['<url>'])
-    recipe = parse_recipe(page)
-    print(recipe)
+    if arguments.get('recipies', False):
+        page = download_recipe(arguments['<url>'])
+        recipe = parse_recipe(page)
+        print(recipe)
+    else:
+        for x in download_categories():
+            print(x)
 
 
 if __name__ == '__main__':
