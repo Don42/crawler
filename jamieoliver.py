@@ -44,6 +44,13 @@ def download_categories():
     categories_div = soup.find('div', {'class': 'cat_secondary'})
     categories_a = categories_div.find_all('a')
     link_list = [x['href'] for x in categories_a]
+    non_recipe_cats = ['http://www.jamieoliver.com/recipes/category/occasion',
+                       'http://www.jamieoliver.com/recipes/category/books']
+    for x in non_recipe_cats:
+        try:
+            link_list.remove(x)
+        except ValueError:
+            pass
     return link_list
 
 
