@@ -41,6 +41,13 @@ def parse_recipe(page):
             'ingredients': ingredients_list}
 
 
+def parse_recipe_list(page):
+    soup = bs4.BeautifulSoup(page)
+    section = soup.find('section', {'id': 'recipe_filtered'})
+    a_list = [x.a['href'] for x in section.find_all('h3')]
+    return a_list
+
+
 def download_main_categories(url):
     r = requests.get(url)
     r.encoding = 'utf-8'
@@ -95,6 +102,11 @@ def main():
     elif arguments.get('cat', False):
         page = download_recipe(arguments['<url>'])
         print(parse_subcategories(detect_subcategories(page)))
+    elif arguments.get('recipes', False):
+        page = download_recipe(arguments['<url>'])
+        recipes = parse_recipe_list(page)
+        for x in recipes:
+            print(x)
     else:
         categories = download_categories(BASE_URL)
         for x in categories:
