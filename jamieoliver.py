@@ -45,7 +45,9 @@ def parse_recipe_list(page):
     soup = bs4.BeautifulSoup(page)
     section = soup.find('section', {'id': 'recipe_filtered'})
     a_list = [x.a['href'] for x in section.find_all('h3')]
-    return a_list
+    link_list = map(functools.partial(prepend_base_url, BASE_URL),
+                    a_list)
+    return link_list
 
 
 def download_main_categories(url):
