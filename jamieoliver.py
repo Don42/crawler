@@ -7,23 +7,26 @@
 # Marco 'don' Kaulea
 # ----------------------------------------------------------------------------
 
-'''Download recipies
+'''Download recipis
 
 Usage:
     jamieoliver recipes <url>
+    jamieoliver recipe <url>
     jamieoliver cat <url>
     jamieoliver categories
+    jamieoliver crawl
 '''
 
 import bs4
 import docopt
 import functools
+import itertools
 import requests
 
 BASE_URL = 'http://www.jamieoliver.com'
 
 
-def download_recipe(url, base=""):
+def download_page(url, base=""):
     url = base + url
     r = requests.get(url)
     r.encoding = 'utf-8'
@@ -44,6 +47,8 @@ def parse_recipe(page):
 def parse_recipe_list(page):
     soup = bs4.BeautifulSoup(page)
     section = soup.find('section', {'id': 'recipe_filtered'})
+    if section is None:
+        return []
     a_list = [x.a['href'] for x in section.find_all('h3')]
     link_list = map(functools.partial(prepend_base_url, BASE_URL),
                     a_list)
@@ -56,14 +61,14 @@ def download_main_categories(url):
     soup = bs4.BeautifulSoup(r.text)
     categories_div = soup.find('div', {'class': 'cat_secondary'})
     categories_a = categories_div.find_all('a')
-    link_list = [x['href'] for x in categories_a]
+    link_list = [x['href'] if x is not None else [] for x in categories_a]
     return link_list
 
 
 def download_categories(url):
     categories = download_main_categories(url)
     for x in categories:
-        page = download_recipe(x)
+        page = download_page(x)
         subcategories = detect_subcategories(page)
         if subcategories is not None:
             subcategories = parse_subcategories(subcategories)
@@ -88,6 +93,20 @@ def parse_subcategories(section):
     return link_list
 
 
+def retrieve_recipe_list(url):
+    page = download_page(url)
+    recipes = parse_recipe_list(page)
+    return recipes
+
+
+def crawl_recipes():
+    categories = download_categories(BASE_URL)
+    recipes = itertools.chain.from_iterable(
+        map(retrieve_recipe_list, categories))
+    for x in recipes:
+        print(x)
+
+
 def prepend_base_url(base, url):
     if 'http' in url:
         return url
@@ -97,18 +116,20 @@ def prepend_base_url(base, url):
 
 def main():
     arguments = docopt.docopt(__doc__)
-    if arguments.get('recipies', False):
-        page = download_recipe(arguments['<url>'])
+    if arguments.get('recipe', False):
+        page = download_page(arguments['<url>'])
         recipe = parse_recipe(page)
         print(recipe)
     elif arguments.get('cat', False):
-        page = download_recipe(arguments['<url>'])
+        page = download_page(arguments['<url>'])
         print(parse_subcategories(detect_subcategories(page)))
     elif arguments.get('recipes', False):
-        page = download_recipe(arguments['<url>'])
+        page = download_page(arguments['<url>'])
         recipes = parse_recipe_list(page)
         for x in recipes:
             print(x)
+    elif arguments.get('crawl', False):
+        crawl_recipes()
     else:
         categories = download_categories(BASE_URL)
         for x in categories:
