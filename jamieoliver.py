@@ -7,7 +7,7 @@
 # Marco 'don' Kaulea
 # ----------------------------------------------------------------------------
 
-'''Download recipis
+'''Download recipes
 
 Usage:
     jamieoliver recipes <url>
@@ -15,15 +15,24 @@ Usage:
     jamieoliver cat <url>
     jamieoliver categories
     jamieoliver crawl
+    jamieoliver process <url>
 '''
 
 import bs4
 import docopt
 import functools
 import itertools
+import json
+import pathlib as pl
 import requests
+import urllib.parse
 
 BASE_URL = 'http://www.jamieoliver.com'
+
+dump_json = functools.partial(json.dumps,
+                              indent=4,
+                              ensure_ascii=False,
+                              sort_keys=True)
 
 
 def download_page(url, base=""):
@@ -36,7 +45,11 @@ def download_page(url, base=""):
 def parse_recipe(page):
     soup = bs4.BeautifulSoup(page)
     content = soup.find('div', {'class': 'tab-content'})
-    desc_yield = content.find('span', {'class': 'description yield'}).text
+    try:
+        desc_yield = content.find('span', {'class': 'description yield'}).text
+    except AttributeError:
+        desc_yield = ''
+
     ingredients_list = [x.text for x in content.find_all(
         'span', {'class': ''})]
     instructions = content.find('p', {'class', 'instructions'}).text
@@ -53,6 +66,38 @@ def parse_recipe_list(page):
     link_list = map(functools.partial(prepend_base_url, BASE_URL),
                     a_list)
     return link_list
+
+
+def process_recipe(url):
+    parsed_url = urllib.parse.urlparse(url)
+    path = parsed_url.path.split('/')
+    name = path[-1]
+    recipe_type = path[-2]
+    filepath = pl.Path('dump/{}/{}.json'.format(recipe_type, name))
+    print(name)
+    if filepath.is_file():
+        print("File already exists\n")
+        return
+
+    try:
+        filepath.parent.mkdir(parents=True)
+    except FileExistsError:
+        if not filepath.parent.is_dir():
+            filepath.parent.unlink()
+            filepath.parent.mkdir(parents=True)
+
+    page = download_page(url)
+    try:
+        recipe = parse_recipe(page)
+    except Exception as e:
+        print(e)
+        print(url)
+        raise
+
+    with filepath.open('w') as f:
+        f.write(dump_json(recipe))
+
+    return filepath
 
 
 def download_main_categories(url):
@@ -103,8 +148,8 @@ def crawl_recipes():
     categories = download_categories(BASE_URL)
     recipes = itertools.chain.from_iterable(
         map(retrieve_recipe_list, categories))
-    for x in recipes:
-        print(x)
+    for url in recipes:
+        process_recipe(url)
 
 
 def prepend_base_url(base, url):
@@ -130,6 +175,9 @@ def main():
             print(x)
     elif arguments.get('crawl', False):
         crawl_recipes()
+    elif arguments.get('process', False):
+        page = process_recipe(arguments['<url>'])
+        print(page)
     else:
         categories = download_categories(BASE_URL)
         for x in categories:
