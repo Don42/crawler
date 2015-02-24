@@ -21,8 +21,8 @@ Usage:
 import bs4
 import docopt
 import functools
-import itertools
 import json
+import multiprocessing
 import pathlib as pl
 import requests
 import urllib.parse
@@ -38,6 +38,8 @@ dump_json = functools.partial(json.dumps,
 def download_page(url, base=""):
     url = base + url
     r = requests.get(url)
+    if r.status_code != 200:
+        return ''
     r.encoding = 'utf-8'
     return r.text
 
@@ -74,10 +76,18 @@ def process_recipe(url):
     name = path[-1]
     recipe_type = path[-2]
     filepath = pl.Path('dump/{}/{}.json'.format(recipe_type, name))
-    print(name)
     if filepath.is_file():
-        print("File already exists\n")
-        return
+        return 'ExistsError'
+
+    page = download_page(url)
+    if page == '':
+        return 'PageEmptyError'
+    try:
+        recipe = parse_recipe(page)
+    except Exception as e:
+        print(e)
+        print(url)
+        raise
 
     try:
         filepath.parent.mkdir(parents=True)
@@ -85,14 +95,6 @@ def process_recipe(url):
         if not filepath.parent.is_dir():
             filepath.parent.unlink()
             filepath.parent.mkdir(parents=True)
-
-    page = download_page(url)
-    try:
-        recipe = parse_recipe(page)
-    except Exception as e:
-        print(e)
-        print(url)
-        raise
 
     with filepath.open('w') as f:
         f.write(dump_json(recipe))
@@ -120,8 +122,10 @@ def download_categories(url):
             subcategories = map(
                 functools.partial(prepend_base_url, BASE_URL),
                 subcategories)
-            categories.extend(subcategories)
-    return set(categories)
+            for x in subcategories:
+                yield x
+    for x in categories:
+        yield x
 
 
 def detect_subcategories(page):
@@ -146,10 +150,17 @@ def retrieve_recipe_list(url):
 
 def crawl_recipes():
     categories = download_categories(BASE_URL)
-    recipes = itertools.chain.from_iterable(
-        map(retrieve_recipe_list, categories))
+    recipes_map = map(retrieve_recipe_list, categories)
+    with multiprocessing.Pool(processes=6) as pool:
+        for x in pool.imap_unordered(process_recipe_list, recipes_map):
+            print(x)
+
+
+def process_recipe_list(recipes):
+    ret = list()
     for url in recipes:
-        process_recipe(url)
+        ret.append(process_recipe(url))
+    return ret
 
 
 def prepend_base_url(base, url):
