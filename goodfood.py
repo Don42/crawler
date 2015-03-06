@@ -33,16 +33,21 @@ def parse_recipe(page):
     soup = bs4.BeautifulSoup(page)
     main_content = soup.find('div', {'id': 'main-content',
                                      'class': 'row main node-type-recipe'})
+    out = {}
     ingredients = main_content.findAll('li', {'itemprop': 'ingredients'})
     ingredients = [x.text for x in ingredients]
     name = main_content.find('h1', {'itemprop': 'name'})
-    name = name.text
-    keywords = parse_meta_tags(main_content, 'keywords')
-    recipe_categories = parse_meta_tags(main_content, 'recipeCategory')
-    cook_time = parse_meta_tag(main_content, 'cookTime')
-    prep_time = parse_meta_tag(main_content, 'prepTime')
-    total_time = parse_meta_tag(main_content, 'totalTime')
-    return recipe_categories
+    out['title'] = name.text
+    content = main_content.find('p', {'itemprop': 'description'})
+    out['description'] = content.text
+    content = main_content.find('li', {'itemprop': 'recipeInstructions'})
+    out['instructions'] = content.text
+    out['keywords'] = parse_meta_tags(main_content, 'keywords')
+    out['recipe_categories'] = parse_meta_tags(main_content, 'recipeCategory')
+    out['cook_time'] = parse_meta_tag(main_content, 'cookTime')
+    out['prep_time'] = parse_meta_tag(main_content, 'prepTime')
+    out['total_time'] = parse_meta_tag(main_content, 'totalTime')
+    return out
 
 
 def main():
