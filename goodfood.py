@@ -10,28 +10,39 @@
 
 Usage:
     goodfood recipe <url>
+    goodfood recipes <url>
     goodfood categories <url>
+    goodfood scrape
 """
 
 import bs4
 import docopt
+import multiprocessing as mp
 import re
 import requests
 
+BASE_URL = 'http://www.bbcgoodfood.com'
+
 
 def make_absolute(url):
-    return 'http://www.bbcgoodfood.com{}'.format(url)
+    return "{}{}".format(BASE_URL, url)
 
 
 def parse_meta_tag(page, itemprop):
     content = page.find('meta', {'itemprop': itemprop})
-    content = content['content']
+    try:
+        content = content['content']
+    except TypeError:
+        return None
     return content
 
 
 def parse_meta_tags(page, itemprop):
     content = page.findAll('meta', {'itemprop': itemprop})
-    content = [x['content'] for x in content]
+    try:
+        content = [x['content'] for x in content]
+    except TypeError:
+        return None
     return content
 
 
@@ -47,7 +58,12 @@ def parse_recipe(page):
     content = main_content.find('p', {'itemprop': 'description'})
     out['description'] = content.text
     content = main_content.find('li', {'itemprop': 'recipeInstructions'})
-    out['instructions'] = content.text
+    if content is not None:
+        out['instructions'] = content.text
+    content = main_content.find('section', {'itemprop': 'recipe-method'})
+    if content is not None:
+        out['method'] = content.find('div', {'class': 'field-item even'}).text
+
     out['keywords'] = parse_meta_tags(main_content, 'keywords')
     out['recipe_categories'] = parse_meta_tags(main_content, 'recipeCategory')
     out['cook_time'] = parse_meta_tag(main_content, 'cookTime')
@@ -78,7 +94,48 @@ def get_categories(url):
     regex = re.compile('^/recipes/category/[^/]*$')
     links = filter(regex.match, links)
     for category in links:
-        yield get_subcategories(make_absolute(category))
+        for subcategory in get_subcategories(make_absolute(category)):
+            yield make_absolute(subcategory)
+
+
+def get_recipes(category_url):
+    r = requests.get(category_url)
+    if r.status_code != 200:
+        raise Exception("Request error")
+    soup = bs4.BeautifulSoup(r.text)
+    main_content = soup.find('div', {'id': 'main-content'})
+    articles = main_content.findAll('article',
+                                    {'itemtype': 'http://schema.org/Recipe'})
+    ret = list()
+    for article in articles:
+        link = article.find('div', {'class': 'node-image'}).a['href']
+        ret.append(make_absolute(link))
+    return ret
+
+
+def scrape_recipe(url):
+    file_name = url.split('/')[-1]
+    try:
+        r = requests.get(url)
+        if r.status_code == 200:
+            parse_recipe(r.text)
+    except TypeError:
+        print(url)
+        raise
+    except AttributeError:
+        print(url)
+        raise
+
+    return file_name
+
+
+def scrape(processes=4):
+    with mp.Pool(processes=processes) as pool:
+        for category in get_categories(BASE_URL):
+            recipe_list = get_recipes(category)
+            it = pool.imap_unordered(scrape_recipe, recipe_list)
+            for recipe in it:
+                print(recipe)
 
 
 def main():
@@ -87,10 +144,14 @@ def main():
         r = requests.get(arguments['<url>'])
         if r.status_code == 200:
             print(parse_recipe(r.text))
+    elif arguments.get('recipes', False):
+        for x in get_recipes(arguments['<url>']):
+            print(x)
     elif arguments.get('categories', False):
         for x in get_categories(arguments['<url>']):
-            for y in x:
-                print(y)
+            print(x)
+    elif arguments.get('scrape', False):
+        scrape()
 
 
 if __name__ == '__main__':
