@@ -83,7 +83,8 @@ def parse_recipe(page):
 def get_subcategories(url):
     r = requests.get(url)
     if r.status_code != 200:
-        raise Exception("Request error: get_subcategories('{}')".format(url))
+        raise requests.exceptions.RequestException(
+            "Request error: get_subcategories('{}')".format(url))
     soup = bs4.BeautifulSoup(r.text)
     main_content = soup.find('div', {'id': 'main-content'})
     links = [x['href'] for x in main_content.findAll('a')]
@@ -95,7 +96,8 @@ def get_subcategories(url):
 def get_categories(url):
     r = requests.get(url)
     if r.status_code != 200:
-        raise Exception("Request error: get_categories('{}')".format(url))
+        raise requests.exceptions.RequestException(
+            "Request error: get_categories('{}')".format(url))
     soup = bs4.BeautifulSoup(r.text)
     navigation = soup.find('div', {'id': 'nav-touch', 'class': 'nav-touch'})
     links = [x['href'] for x in navigation.findAll('a')]
@@ -109,7 +111,8 @@ def get_categories(url):
 def get_recipes(category_url):
     r = requests.get(category_url)
     if r.status_code != 200:
-        raise Exception("Request error: get_recipes('{}')".format(category_url))
+        raise requests.exceptions.RequestException(
+            "Request error: get_recipes('{}')".format(category_url))
     soup = bs4.BeautifulSoup(r.text)
     main_content = soup.find('div', {'id': 'main-content'})
     articles = main_content.findAll('article',
@@ -145,7 +148,10 @@ def scrape_recipe(url):
 def scrape(processes=4):
     with mp.Pool(processes=processes) as pool:
         for category in get_categories(BASE_URL):
-            recipe_list = get_recipes(category)
+            try:
+                recipe_list = get_recipes(category)
+            except requests.exceptions.RequestException:
+                continue
             it = pool.imap_unordered(scrape_recipe, recipe_list)
             for recipe in it:
                 print(recipe)
