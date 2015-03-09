@@ -17,11 +17,19 @@ Usage:
 
 import bs4
 import docopt
+import functools
+import json
 import multiprocessing as mp
+import pathlib as pl
 import re
 import requests
 
 BASE_URL = 'http://www.bbcgoodfood.com'
+
+dump_json = functools.partial(json.dumps,
+                              indent=4,
+                              ensure_ascii=False,
+                              sort_keys=True)
 
 
 def make_absolute(url):
@@ -75,7 +83,7 @@ def parse_recipe(page):
 def get_subcategories(url):
     r = requests.get(url)
     if r.status_code != 200:
-        raise Exception("Request error")
+        raise Exception("Request error: get_subcategories('{}')".format(url))
     soup = bs4.BeautifulSoup(r.text)
     main_content = soup.find('div', {'id': 'main-content'})
     links = [x['href'] for x in main_content.findAll('a')]
@@ -87,7 +95,7 @@ def get_subcategories(url):
 def get_categories(url):
     r = requests.get(url)
     if r.status_code != 200:
-        raise Exception("Request error")
+        raise Exception("Request error: get_categories('{}')".format(url))
     soup = bs4.BeautifulSoup(r.text)
     navigation = soup.find('div', {'id': 'nav-touch', 'class': 'nav-touch'})
     links = [x['href'] for x in navigation.findAll('a')]
@@ -101,7 +109,7 @@ def get_categories(url):
 def get_recipes(category_url):
     r = requests.get(category_url)
     if r.status_code != 200:
-        raise Exception("Request error")
+        raise Exception("Request error: get_recipes('{}')".format(category_url))
     soup = bs4.BeautifulSoup(r.text)
     main_content = soup.find('div', {'id': 'main-content'})
     articles = main_content.findAll('article',
@@ -115,10 +123,15 @@ def get_recipes(category_url):
 
 def scrape_recipe(url):
     file_name = url.split('/')[-1]
+    file_path = pl.Path('goodfood') / file_name
+    if file_path.is_file():
+        return file_name
     try:
         r = requests.get(url)
         if r.status_code == 200:
-            parse_recipe(r.text)
+            recipe = parse_recipe(r.text)
+            with file_path.open('w') as f:
+                f.write(dump_json(recipe))
     except TypeError:
         print(url)
         raise
