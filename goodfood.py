@@ -25,6 +25,7 @@ import re
 import requests
 
 BASE_URL = 'http://www.bbcgoodfood.com'
+USER_AGENT = {'user-agent': 'spider'}
 
 dump_json = functools.partial(json.dumps,
                               indent=4,
@@ -81,7 +82,7 @@ def parse_recipe(page):
 
 
 def get_subcategories(url):
-    r = requests.get(url)
+    r = requests.get(url, headers=USER_AGENT)
     if r.status_code != 200:
         raise requests.exceptions.RequestException(
             "Request error: get_subcategories('{}')".format(url))
@@ -94,7 +95,7 @@ def get_subcategories(url):
 
 
 def get_categories(url):
-    r = requests.get(url)
+    r = requests.get(url, headers=USER_AGENT)
     if r.status_code != 200:
         raise requests.exceptions.RequestException(
             "Request error: get_categories('{}')".format(url))
@@ -109,7 +110,7 @@ def get_categories(url):
 
 
 def get_recipes(category_url):
-    r = requests.get(category_url)
+    r = requests.get(category_url, headers=USER_AGENT)
     if r.status_code != 200:
         raise requests.exceptions.RequestException(
             "Request error: get_recipes('{}')".format(category_url))
@@ -130,7 +131,7 @@ def scrape_recipe(url):
     if file_path.is_file():
         return file_name
     try:
-        r = requests.get(url)
+        r = requests.get(url, headers=USER_AGENT)
         if r.status_code == 200:
             recipe = parse_recipe(r.text)
             with file_path.open('w') as f:
@@ -160,7 +161,7 @@ def scrape(processes=4):
 def main():
     arguments = docopt.docopt(__doc__)
     if arguments.get('recipe', False):
-        r = requests.get(arguments['<url>'])
+        r = requests.get(arguments['<url>'], headers=USER_AGENT)
         if r.status_code == 200:
             print(parse_recipe(r.text))
     elif arguments.get('recipes', False):
