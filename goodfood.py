@@ -73,6 +73,7 @@ def parse_recipe(page):
     if content is not None:
         out['method'] = content.find('div', {'class': 'field-item even'}).text
 
+    out['ingredients'] = ingredients
     out['keywords'] = parse_meta_tags(main_content, 'keywords')
     out['recipe_categories'] = parse_meta_tags(main_content, 'recipeCategory')
     out['cook_time'] = parse_meta_tag(main_content, 'cookTime')
