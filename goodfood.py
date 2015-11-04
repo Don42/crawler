@@ -164,7 +164,7 @@ def main():
     if arguments.get('recipe', False):
         r = requests.get(arguments['<url>'], headers=USER_AGENT)
         if r.status_code == 200:
-            print(parse_recipe(r.text))
+            print(dump_json(parse_recipe(r.text)))
     elif arguments.get('recipes', False):
         for x in get_recipes(arguments['<url>']):
             print(x)
