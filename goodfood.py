@@ -10,19 +10,25 @@
 
 Usage:
     goodfood recipe <url>
-    goodfood recipes <url>
+    goodfood subcategory <url>
+    goodfood category <url>
     goodfood categories <url>
     goodfood scrape
 """
 
+import aiohttp
+import asyncio
 import bs4
 import docopt
 import functools
 import json
-import multiprocessing as mp
 import pathlib as pl
 import re
-import requests
+import signal
+import sys
+import urllib.parse
+
+HTML_PARSER = 'lxml'
 
 BASE_URL = 'http://www.bbcgoodfood.com'
 USER_AGENT = {'user-agent': 'spider'}
@@ -56,7 +62,8 @@ def parse_meta_tags(page, itemprop):
 
 
 def parse_recipe(page):
-    soup = bs4.BeautifulSoup(page)
+    strainer = bs4.SoupStrainer('div', {'id': 'main-content', 'class': 'row main node-type-recipe'})
+    soup = bs4.BeautifulSoup(page, HTML_PARSER, parse_only=strainer)
     main_content = soup.find('div', {'id': 'main-content',
                                      'class': 'row main node-type-recipe'})
     out = {}
@@ -82,97 +89,188 @@ def parse_recipe(page):
     return out
 
 
-def get_subcategories(url):
-    r = requests.get(url, headers=USER_AGENT)
-    if r.status_code != 200:
-        raise requests.exceptions.RequestException(
-            "Request error: get_subcategories('{}')".format(url))
-    soup = bs4.BeautifulSoup(r.text)
+def parse_category(url, page):
+    soup = bs4.BeautifulSoup(page, 'lxml')
     main_content = soup.find('div', {'id': 'main-content'})
     links = [x['href'] for x in main_content.findAll('a')]
     regex = re.compile('^/recipes/collection/[^/]*$')
     links = filter(regex.match, links)
-    return links
+    return [urllib.parse.urljoin(url, x) for x in links]
 
 
-def get_categories(url):
-    r = requests.get(url, headers=USER_AGENT)
-    if r.status_code != 200:
-        raise requests.exceptions.RequestException(
-            "Request error: get_categories('{}')".format(url))
-    soup = bs4.BeautifulSoup(r.text)
+def parse_categories(url, page):
+    soup = bs4.BeautifulSoup(page, 'lxml')
     navigation = soup.find('div', {'id': 'nav-touch', 'class': 'nav-touch'})
     links = [x['href'] for x in navigation.findAll('a')]
     regex = re.compile('^/recipes/category/[^/]*$')
     links = filter(regex.match, links)
-    for category in links:
-        for subcategory in get_subcategories(make_absolute(category)):
-            yield make_absolute(subcategory)
+    return [urllib.parse.urljoin(url, x) for x in links]
 
 
-def get_recipes(category_url):
-    r = requests.get(category_url, headers=USER_AGENT)
-    if r.status_code != 200:
-        raise requests.exceptions.RequestException(
-            "Request error: get_recipes('{}')".format(category_url))
-    soup = bs4.BeautifulSoup(r.text)
+def parse_subcategory(url, page):
+    soup = bs4.BeautifulSoup(page, 'lxml')
     main_content = soup.find('div', {'id': 'main-content'})
     articles = main_content.findAll('article',
                                     {'itemtype': 'http://schema.org/Recipe'})
     ret = list()
     for article in articles:
         link = article.find('div', {'class': 'node-image'}).a['href']
-        ret.append(make_absolute(link))
+        ret.append(urllib.parse.urljoin(url, link))
     return ret
 
 
-def scrape_recipe(url):
-    file_name = url.split('/')[-1]
-    file_path = pl.Path('goodfood') / file_name
-    if file_path.is_file():
-        return file_name
-    try:
-        r = requests.get(url, headers=USER_AGENT)
-        if r.status_code == 200:
-            recipe = parse_recipe(r.text)
+class Crawler:
+    def __init__(self, root_url, root_type, loop, max_tasks=50):
+        self.root_url = root_url
+        self.root_type = root_type
+        self.loop = loop
+        self.todo = set()
+        self.busy = set()
+        self.done = {}
+        self.tasks = set()
+        self.sem = asyncio.Semaphore(max_tasks)
+        self.type_handler = {'recipe': self.scrape_recipe,
+                             'subcategory': self.scrape_subcategory,
+                             'category': self.scrape_category,
+                             'full': self.scrape_categories}
+
+        # connector stores cookies between requests and uses connection pool
+        self.connector = aiohttp.TCPConnector(share_cookies=True, loop=loop)
+
+    async def run(self):
+        asyncio.Task(self.add_urls([self.root_url], self.root_type))  # Set initial work.
+        await asyncio.sleep(1)
+        while self.busy:
+            await asyncio.sleep(1)
+
+        self.connector.close()
+        self.loop.stop()
+
+    async def add_urls(self, urls, url_type='recipe'):
+        for url in urls:
+            url, frag = urllib.parse.urldefrag(url)
+            if (url not in self.busy and
+                    url not in self.done and
+                    url not in self.todo):
+                self.todo.add(url)
+                await self.sem.acquire()
+                task = asyncio.Task(self.type_handler[url_type](url))
+                task.add_done_callback(lambda t: self.sem.release())
+                task.add_done_callback(self.tasks.remove)
+                self.tasks.add(task)
+
+    async def get_page(self, url):
+        with await self.sem:
+            r = await aiohttp.get(url, connector=self.connector)
+            if r.status != 200:
+                r.close()
+                raise Exception("Request Error {}".format(url))
+            page = await r.text(encoding='utf-8')
+            r.close()
+            return page
+
+    async def get_recipe(self, url):
+        page = await self.get_page(url)
+        return parse_recipe(page)
+
+    async def scrape_recipe(self, url):
+        file_name = url.split('/')[-1]
+        file_path = pl.Path('goodfood') / file_name
+        if file_path.is_file():
+            self.todo.remove(url)
+            return
+        self.todo.remove(url)
+        self.busy.add(url)
+        try:
+            recipe = await self.get_recipe(url)
+        except Exception as exc:
+            print('...', url, 'has error', repr(str(exc)))
+            self.done[url] = False
+        else:
             with file_path.open('w') as f:
                 f.write(dump_json(recipe))
-    except TypeError:
-        print(url)
-        raise
-    except AttributeError:
-        print(url)
-        raise
+            self.busy.remove(url)
+            self.done[url] = True
 
-    return file_name
+    async def get_subcategory(self, url):
+        page = await self.get_page(url)
+        recipes = parse_subcategory(url, page)
+        return recipes
 
+    async def scrape_subcategory(self, url):
+        self.todo.remove(url)
+        self.busy.add(url)
+        try:
+            recipes = await self.get_subcategory(url)
+        except Exception as exc:
+            print('...', url, 'has error', repr(str(exc)))
+            self.done[url] = False
+        else:
+            asyncio.Task(self.add_urls(recipes, 'recipe'))
+            self.done[url] = True
+        self.busy.remove(url)
 
-def scrape(processes=4):
-    with mp.Pool(processes=processes) as pool:
-        for category in get_categories(BASE_URL):
-            try:
-                recipe_list = get_recipes(category)
-            except requests.exceptions.RequestException:
-                continue
-            it = pool.imap_unordered(scrape_recipe, recipe_list)
-            for recipe in it:
-                print(recipe)
+    async def get_category(self, url):
+        page = await self.get_page(url)
+        return parse_category(url, page)
+
+    async def scrape_category(self, url):
+        self.todo.remove(url)
+        self.busy.add(url)
+        try:
+            subcategories = await self.get_category(url)
+        except Exception as exc:
+            print('...', url, 'has error', repr(str(exc)))
+            self.done[url] = False
+        else:
+            asyncio.Task(self.add_urls(subcategories, 'subcategory'))
+            self.done[url] = True
+        self.busy.remove(url)
+
+    async def get_categories(self, url):
+        page = await self.get_page(url)
+        return parse_categories(url, page)
+
+    async def scrape_categories(self, url):
+        self.todo.remove(url)
+        self.busy.add(url)
+        try:
+            categories = await self.get_categories(url)
+        except Exception as exc:
+            print('...', url, 'has error', repr(str(exc)))
+            self.done[url] = False
+        else:
+            asyncio.Task(self.add_urls(categories, 'category'))
+            self.done[url] = True
+        self.busy.remove(url)
 
 
 def main():
     arguments = docopt.docopt(__doc__)
+    loop = asyncio.get_event_loop()
     if arguments.get('recipe', False):
-        r = requests.get(arguments['<url>'], headers=USER_AGENT)
-        if r.status_code == 200:
-            print(dump_json(parse_recipe(r.text)))
-    elif arguments.get('recipes', False):
-        for x in get_recipes(arguments['<url>']):
-            print(x)
-    elif arguments.get('categories', False):
-        for x in get_categories(arguments['<url>']):
-            print(x)
-    elif arguments.get('scrape', False):
-        scrape()
+        c = Crawler(arguments['<url>'], 'recipe', loop)
+    elif arguments.get('subcategory'):
+        c = Crawler(arguments['<url>'], 'subcategory', loop)
+    elif arguments.get('category'):
+        c = Crawler(arguments['<url>'], 'category', loop)
+    elif arguments.get('scrape'):
+        c = Crawler(BASE_URL, 'full', loop)
+    else:
+        loop.stop()
+        sys.exit(1)
+
+    asyncio.Task(c.run())
+
+    try:
+        loop.add_signal_handler(signal.SIGINT, loop.stop)
+    except RuntimeError:
+        pass
+    loop.run_forever()
+    print('todo:', len(c.todo))
+    print('busy:', len(c.busy))
+    print('done:', len(c.done), '; ok:', sum(c.done.values()))
+    print('tasks:', len(c.tasks))
 
 
 if __name__ == '__main__':
