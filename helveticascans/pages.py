@@ -8,9 +8,9 @@ class Page:
         self._image_uri = None
 
     @property
-    def uri(self) -> str:
+    async def uri(self) -> str:
         if self._image_uri is None:
-            self._image_uri = get_image_uri(self.page_uri)
+            self._image_uri = await get_image_uri(self.page_uri)
         return self._image_uri
 
     @classmethod
@@ -33,15 +33,15 @@ class Page:
     def __str__(self):
         return f"Page {self.number}"
 
-    def get_content(self):
-        return get_image(self.uri)
+    async def get_content(self) -> bytes:
+        return await get_image(await self.uri)
 
     @property
-    def suffix(self):
-        return self.uri.split('.')[-1]
+    async def suffix(self):
+        return (await self.uri).split('.')[-1]
 
-    def get_internal_filename(self) -> str:
-        return f"page_{self.number:0>5}.{self.suffix}"
+    async def get_internal_filename(self) -> str:
+        return f"page_{self.number:0>5}.{await self.suffix}"
 
 
 class Cover(Page):
@@ -57,10 +57,10 @@ class Cover(Page):
     def __str__(self):
         return f"Cover {self.number}"
 
-    def get_internal_filename(self) -> str:
-        return f"cover.{self.suffix}"
+    async def get_internal_filename(self) -> str:
+        return f"cover.{await self.suffix}"
 
 
-def uris_to_pages(pages_list):
-    pages_list = sorted((Page.from_uri(x['href']) for x in pages_list))
+async def uris_to_pages(pages_list):
+    pages_list = sorted((Page.from_uri(x['href']) for x in await pages_list))
     return pages_list

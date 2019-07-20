@@ -31,7 +31,8 @@ class Volume:
                 raise StopIteration
         return self
 
-    def write_to_file(self, file_path: pl.Path):
+    async def write_to_file(self, file_path: pl.Path):
+        # TODO Must create folder here
         with zipfile.ZipFile(
                 file_path,
                 mode='a',
@@ -39,19 +40,20 @@ class Volume:
         ) as zip_file:
             if self.cover is not None:
                 print(f"Writing Volume {self.number} Cover")
-                self.write_page_to_file(zip_file, self.cover)
+                await self.write_page_to_file(zip_file, self.cover)
             for page in self.pages:
-                print(f"Writing Volume {self.number} Page {page.number}")
-                self.write_page_to_file(zip_file, page)
+                print(f"Writing Volume {self.number} Page {page.number} of {self.pages[-1].number}")
+                await self.write_page_to_file(zip_file, page)
 
     @staticmethod
-    def write_page_to_file(
+    async def write_page_to_file(
             zip_file: zipfile.ZipFile,
             page: Page):
-        if page.get_internal_filename() not in zip_file.namelist():
+        filename = await page.get_internal_filename()
+        if filename not in zip_file.namelist():
             zip_file.writestr(
-                zinfo_or_arcname=page.get_internal_filename(),
-                data=page.get_content())
+                zinfo_or_arcname=filename,
+                data=await page.get_content())
 
     def __repr__(self):
         return f"<{self.__class__} {self.number}>"
