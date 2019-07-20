@@ -10,6 +10,8 @@ requests = "*"
 ipython = "*"
 beautifulsoup4 = "*"
 aiohttp = "*"
+aiodns = "*"
+cchardet = "*"
 
 [requires]
 python_version = "3.7"
