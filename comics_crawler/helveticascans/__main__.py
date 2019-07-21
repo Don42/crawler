@@ -2,9 +2,10 @@ import argparse
 import asyncio
 import pathlib as pl
 
-from helveticascans.uri import get_page_list
-from helveticascans.pages import uris_to_pages
-from helveticascans.volume import group_volumes
+from .uri import get_page_list
+from .pages import uris_to_pages
+from .volume import group_volumes
+from .series import download_series
 
 kyuu_chan_base_url = "https://helveticascans.com/r/series/wonder-cat-kyuu-chan/"
 
@@ -36,4 +37,4 @@ async def main():
 
 if __name__ == '__main__':
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(main())
+    loop.run_until_complete(download_series("wonder-cat-kyuu-chan"))

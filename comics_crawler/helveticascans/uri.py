@@ -3,9 +3,11 @@ import re
 import aiohttp
 from aiohttp.client_exceptions import ClientConnectionError
 from aiohttp.typedefs import StrOrURL
+from yarl import URL
 from bs4 import BeautifulSoup, element
 
 HTML_PARSER = 'html.parser'
+SERIES_BASE_URL = URL("https://helveticascans.com/r/series/")
 
 pattern = re.compile(r"en/0/(\d+)/(\d+)?")
 
@@ -18,6 +20,13 @@ def parse_page_link(link: str):
 
 def parse_page_links(links: list):
     return [(item['href'], parse_page_link(item['href']).groups()) for item in links]
+
+
+async def retrieve_series_page(series_name: str):
+    series_uri = SERIES_BASE_URL / series_name
+    response = await try_get(series_uri)
+    response.raise_for_status()
+    return response
 
 
 async def try_get(uri, retry_count=3):
@@ -43,6 +52,11 @@ async def get_image(image_uri: StrOrURL) -> bytes:
     response = await try_get(image_uri)
     response.raise_for_status()
     return await response.read()
+
+
+def get_suffix(image_url: str):
+    return image_url.split('.')[-1]
+
 
 
 async def get_page_list(series_url: StrOrURL):

@@ -1,4 +1,4 @@
-from helveticascans import parse_page_links
+from .uri import parse_page_links
 
 
 def compare(x):

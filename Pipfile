@@ -12,6 +12,7 @@ beautifulsoup4 = "*"
 aiohttp = "*"
 aiodns = "*"
 cchardet = "*"
+yarl = "*"
 
 [requires]
 python_version = "3.7"
