@@ -11,7 +11,16 @@ SERIES_BASE_URL = URL("https://helveticascans.com/r/series/")
 
 pattern = re.compile(r"en/0/(\d+)/(\d+)?")
 
-session = aiohttp.ClientSession()
+session: aiohttp.ClientSession = None
+
+
+def init_session(loop):
+    global session
+    session = aiohttp.ClientSession(loop=loop)
+
+
+def close_session():
+    session.close()
 
 
 def parse_page_link(link: str):

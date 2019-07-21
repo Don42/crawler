@@ -2,7 +2,7 @@ import argparse
 import asyncio
 import pathlib as pl
 
-from .uri import get_page_list
+from .uri import get_page_list, init_session, close_session
 from .pages import uris_to_pages
 from .volume import group_volumes
 from .series import download_series
@@ -17,7 +17,7 @@ def parse_arguments():
     return args
 
 
-async def main():
+async def main_():
     args = parse_arguments()
     download_path = pl.Path("./download")
     pages_list = get_page_list(kyuu_chan_base_url)
@@ -35,6 +35,11 @@ async def main():
             )
 
 
+async def main():
+    init_session(asyncio.get_running_loop())
+    await download_series("wonder-cat-kyuu-chan")
+    close_session()
+
+
 if __name__ == '__main__':
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(download_series("wonder-cat-kyuu-chan"))
+    asyncio.run(main())
